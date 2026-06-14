@@ -1,0 +1,18 @@
+# Environment files
+.env
+.env.local
+
+# Local data
+/data/
+/workspace/
+
+# Backend
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.pytest_cache/
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
