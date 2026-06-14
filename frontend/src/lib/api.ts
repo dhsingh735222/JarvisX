@@ -8,6 +8,28 @@ export class ApiError extends Error {
   }
 }
 
+/** FastAPI error responses put a string, a dict, or a list of validation-error
+ * dicts in `detail`. Turn any of those into a readable string. */
+function formatErrorDetail(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (item && typeof item === "object" && "msg" in item) {
+          const loc = Array.isArray((item as { loc?: unknown[] }).loc)
+            ? (item as { loc: unknown[] }).loc.join(".")
+            : "";
+          const msg = String((item as { msg: unknown }).msg);
+          return loc ? `${loc}: ${msg}` : msg;
+        }
+        return JSON.stringify(item);
+      })
+      .join("; ");
+  }
+  if (detail && typeof detail === "object") return JSON.stringify(detail);
+  return String(detail);
+}
+
 async function request<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<T> {
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string> | undefined),
@@ -20,14 +42,14 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
 
   if (!res.ok) {
-    let detail = res.statusText;
+    let detail: unknown = res.statusText;
     try {
       const data = await res.json();
-      detail = data.detail || JSON.stringify(data);
+      detail = data.detail ?? data;
     } catch {
       // ignore - use statusText
     }
-    throw new ApiError(res.status, detail);
+    throw new ApiError(res.status, formatErrorDetail(detail));
   }
 
   if (res.status === 204) return undefined as T;
