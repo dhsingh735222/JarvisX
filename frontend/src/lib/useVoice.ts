@@ -26,6 +26,30 @@ function getWakeWordSupportServerSnapshot(): boolean {
   return false;
 }
 
+/** Turn a getUserMedia failure into a message that tells the user exactly
+ * what to do, instead of a generic "access denied". */
+function describeMicError(err: unknown): string {
+  const name = err instanceof DOMException ? err.name : "";
+  switch (name) {
+    case "NotAllowedError":
+    case "PermissionDeniedError":
+      return 'Microphone is blocked for this site. Click the lock/info icon next to the address bar, set "Microphone" to Allow, then reload the page.';
+    case "NotFoundError":
+    case "DevicesNotFoundError":
+      return "No microphone was found. Connect a microphone and try again.";
+    case "NotReadableError":
+    case "TrackStartError":
+      return "Your microphone is in use by another app. Close other apps that might be using it and try again.";
+    case "SecurityError":
+      return "Voice input requires a secure connection - use http://localhost rather than an IP address.";
+    default:
+      if (typeof navigator !== "undefined" && !navigator.mediaDevices) {
+        return "Voice input isn't available here - use http://localhost (not an IP address) in Chrome, Edge, Firefox, or Safari.";
+      }
+      return `Microphone access failed${name ? ` (${name})` : ""}. Check your browser's microphone permissions and try again.`;
+  }
+}
+
 export function useVoiceAssistant(token: string | null, onCommand: (text: string) => void) {
   const [status, setStatus] = useState<VoiceStatus>("idle");
   const [wakeWordActive, setWakeWordActive] = useState(false);
@@ -180,8 +204,8 @@ export function useVoiceAssistant(token: string | null, onCommand: (text: string
       mediaRecorderRef.current = recorder;
       recorder.start();
       setStatus("recording");
-    } catch {
-      setError("Microphone access denied");
+    } catch (err) {
+      setError(describeMicError(err));
       if (wakeWordActiveRef.current) {
         pausedForSpeechRef.current = false;
         startWakeWord();
@@ -193,6 +217,8 @@ export function useVoiceAssistant(token: string | null, onCommand: (text: string
     mediaRecorderRef.current?.stop();
   }, []);
 
+  const clearError = useCallback(() => setError(null), []);
+
   useEffect(() => {
     return () => {
       recognitionRef.current?.stop();
@@ -200,9 +226,25 @@ export function useVoiceAssistant(token: string | null, onCommand: (text: string
     };
   }, []);
 
+  // Proactively warn if the microphone permission was already denied,
+  // instead of waiting for the user to press the mic button and hit
+  // the same error every time.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.permissions?.query) return;
+    navigator.permissions
+      .query({ name: "microphone" as PermissionName })
+      .then((status) => {
+        if (status.state === "denied") {
+          setError(describeMicError({ name: "NotAllowedError" } as DOMException));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   return {
     status,
     error,
+    clearError,
     wakeWordActive,
     wakeWordSupported,
     toggleWakeWord,

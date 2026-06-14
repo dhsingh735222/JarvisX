@@ -130,7 +130,18 @@ export default function ChatPanel() {
         </div>
       </div>
 
-      {voice.error && <p className="text-xs text-jarvis-danger">{voice.error}</p>}
+      {voice.error && (
+        <p className="flex items-start gap-2 text-xs text-jarvis-danger">
+          <span className="flex-1">{voice.error}</span>
+          <button
+            onClick={voice.clearError}
+            className="shrink-0 text-jarvis-muted hover:text-jarvis-text"
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </p>
+      )}
       {!voice.wakeWordSupported && (
         <p className="text-xs text-jarvis-muted">
           Continuous wake-word listening needs Chrome or Edge. You can still use the mic button below.
